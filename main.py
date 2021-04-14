@@ -1,6 +1,4 @@
-import math
-import RegExService
-import random
+import re
 import numpy
 from functools import reduce
 import sys
@@ -15,9 +13,28 @@ iterations = 1000
 ants = 22
 
 
+def getData(fileName):
+    f = open(fileName, "r")
+    content = f.read()
+    optimalValue = re.search("Optimal value: (\d+)", content, re.MULTILINE)
+    if(optimalValue != None):
+        optimalValue = optimalValue.group(1)
+    else:
+        optimalValue = re.search("Best value: (\d+)", content, re.MULTILINE)
+        if(optimalValue != None):
+            optimalValue = optimalValue.group(1)
+    capacity = re.search("^CAPACITY : (\d+)$", content, re.MULTILINE).group(1)
+    graph = re.findall(r"^(\d+) (\d+) (\d+)$", content, re.MULTILINE)
+    demand = re.findall(r"^(\d+) (\d+)$", content, re.MULTILINE)
+    graph = {int(a): (int(b), int(c)) for a, b, c in graph}
+    demand = {int(a): int(b) for a, b in demand}
+    capacity = int(capacity)
+    optimalValue = int(optimalValue)
+    return capacity, graph, demand, optimalValue
+
 def generateGraph():
     # TODO: 输入格式太复杂了
-    capacityLimit, graph, demand, optimalValue = RegExService.getData(fileName)
+    capacityLimit, graph, demand, optimalValue = getData(fileName)
     vertices = list(graph.keys())
     vertices.remove(1)
 
@@ -123,7 +140,7 @@ def main():
             solution = solutionOfOneAnt(vertices.copy(), edges, capacityLimit, demand.copy(), feromones)
             solutions.append((solution, rateSolution(solution, edges)))
         bestSolution = updateFeromone(feromones, solutions, bestSolution)
-        # print(str(i)+":\t"+str(int(bestSolution[1]))+"\t"+str(optimalValue))
+        print(str(i) + "/" + str(iterations) + ": " + str(bestSolution[1]), end='\r', flush=True)
     return bestSolution
 
 
