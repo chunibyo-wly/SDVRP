@@ -1,6 +1,4 @@
-import math
-import RegExService
-import random
+import re
 import numpy
 from functools import reduce
 import sys
@@ -15,9 +13,28 @@ iterations = 1000
 ants = 22
 
 
+def getData(fileName):
+    f = open(fileName, "r")
+    content = f.read()
+    optimalValue = re.search("Optimal value: (\d+)", content, re.MULTILINE)
+    if(optimalValue != None):
+        optimalValue = optimalValue.group(1)
+    else:
+        optimalValue = re.search("Best value: (\d+)", content, re.MULTILINE)
+        if(optimalValue != None):
+            optimalValue = optimalValue.group(1)
+    capacity = re.search("^CAPACITY : (\d+)$", content, re.MULTILINE).group(1)
+    graph = re.findall(r"^(\d+) (\d+) (\d+)$", content, re.MULTILINE)
+    demand = re.findall(r"^(\d+) (\d+)$", content, re.MULTILINE)
+    graph = {int(a): (int(b), int(c)) for a, b, c in graph}
+    demand = {int(a): int(b) for a, b in demand}
+    capacity = int(capacity)
+    optimalValue = int(optimalValue)
+    return capacity, graph, demand, optimalValue
+
 def generateGraph():
     # TODO: 输入格式太复杂了
-    capacityLimit, graph, demand, optimalValue = RegExService.getData(fileName)
+    capacityLimit, graph, demand, optimalValue = getData(fileName)
     vertices = list(graph.keys())
     vertices.remove(1)
 
@@ -32,7 +49,6 @@ def solutionOfOneAnt(vertices, edges, capacityLimit, demand, feromones):
     solution = list()
 
     while len(vertices) != 0:
-        # TODO: 两个while多余了
         path = list()
         city = numpy.random.choice(vertices)
         capacity = capacityLimit - demand[city]
@@ -45,16 +61,33 @@ def solutionOfOneAnt(vertices, edges, capacityLimit, demand, feromones):
             # 概率归一化
             probabilities = probabilities / numpy.sum(probabilities)
             # 根据概率选出城市
-            city = numpy.random.choice(vertices, p=probabilities)
-            # 在该城市卸货，如果超过当前需求量超过当前装载量，直接回城
-            capacity = capacity - demand[city]
+            _city = numpy.random.choice(vertices, p=probabilities)
 
-            if capacity > 0:
-                path.append(city)
-                vertices.remove(city)
+            if capacity >= demand[_city]:
+                # 如果装载量 >= 需求，直接卸货，寻找下一个城市
+                capacity = capacity - demand[_city]
+                path.append(_city)
+                vertices.remove(_city)
             else:
-                # TODO: 可拆分问题
-                break
+                # 如果装载量 < 需求，进行拆分，保证去下一个城市+回城的距离最小
+                min_distance = float("inf")
+                for i in vertices:
+                    # 下一个城市+回城的距离
+                    dis = edges[(min(i, city), max(i, city))] + edges[(min(i, 1), max(i, 1))]
+                    if dis < min_distance:
+                        _city = i
+                        min_distance = dis
+
+                path.append(_city)
+                if capacity >= demand[_city]:
+                    # 如果装载量 >= 需求，直接卸货，寻找下一个城市
+                    capacity = capacity - demand[_city]
+                    vertices.remove(_city)
+                else:
+                    # 如果装载量 < 需求，直接卸货，跳出当前路程
+                    demand[_city] = demand[_city] - capacity
+                    break
+
         solution.append(path)
     return solution
 
@@ -104,10 +137,10 @@ def main():
     for i in range(iterations):
         solutions = list()
         for _ in range(ants):
-            solution = solutionOfOneAnt(vertices.copy(), edges, capacityLimit, demand, feromones)
+            solution = solutionOfOneAnt(vertices.copy(), edges, capacityLimit, demand.copy(), feromones)
             solutions.append((solution, rateSolution(solution, edges)))
         bestSolution = updateFeromone(feromones, solutions, bestSolution)
-        # print(str(i)+":\t"+str(int(bestSolution[1]))+"\t"+str(optimalValue))
+        print(str(i) + "/" + str(iterations) + ": " + str(bestSolution[1]), end='\r', flush=True)
     return bestSolution
 
 
@@ -169,6 +202,3 @@ if __name__ == "__main__":
     solution = main()
 
     print("Solution: " + str(solution))
-    if (fileName == "E-n22-k4.txt"):
-        optimalSolution = ([[18, 21, 19, 16, 13], [17, 20, 22, 15], [14, 12, 5, 4, 9, 11], [10, 8, 6, 3, 2, 7]], 375)
-        print("Optimal solution: " + str(optimalSolution))
